@@ -1,0 +1,335 @@
+# Frigate Configuration for Unifi Protect Integration
+# Optimized for 5 cameras with AI detection
+
+# MQTT Configuration (connects to Home Assistant)
+mqtt:
+  host: 192.168.0.81  # Your Home Assistant IP
+  port: 1883
+  topic_prefix: frigate
+  client_id: frigate
+  user: frigate  # Optional MQTT user
+  password: frigate_pass  # Optional MQTT password
+
+# Database for storing events
+database:
+  path: /media/frigate/frigate.db
+
+# API Configuration
+api:
+  host: 0.0.0.0
+  port: 5000
+
+# Telemetry (can be disabled for privacy)
+telemetry:
+  network_interfaces:
+    - eth0
+  stats:
+    amd_gpu_stats: false
+    intel_gpu_stats: auto
+    network_bandwidth: false
+
+# AI Detection Model Configuration
+model:
+  width: 320
+  height: 320
+  input_tensor: nhwc
+  input_pixel_format: rgb
+  path: /openvino-model/ssdlite_mobilenet_v2.xml
+  labelmap_path: /openvino-model/coco_91cl_bkgr.txt
+
+# Detection Engine
+detectors:
+  ov:
+    type: openvino
+    device: AUTO
+    model:
+      path: /openvino-model/ssdlite_mobilenet_v2.xml
+
+# Go2RTC for WebRTC streaming
+go2rtc:
+  streams:
+    front_door: rtsp://192.168.0.XXX:7447/YOUR_DOORBELL_STREAM_ID
+    driveway: rtsp://192.168.0.XXX:7447/YOUR_DRIVEWAY_STREAM_ID
+    garage: rtsp://192.168.0.XXX:7447/YOUR_GARAGE_STREAM_ID
+    backyard_patio: rtsp://192.168.0.XXX:7447/YOUR_PATIO_STREAM_ID
+    back_road: rtsp://192.168.0.XXX:7447/YOUR_ROAD_STREAM_ID
+
+# Camera Configurations
+cameras:
+  front_door:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://192.168.0.XXX:7447/YOUR_DOORBELL_STREAM_ID
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: true
+      width: 1920
+      height: 1080
+      fps: 5
+      max_disappeared: 25
+    record:
+      enabled: true
+      retain:
+        days: 7
+        mode: active_objects
+      events:
+        pre_capture: 5
+        post_capture: 10
+        objects:
+          - person
+          - car
+          - package
+    snapshots:
+      enabled: true
+      timestamp: false
+      bounding_box: true
+      crop: false
+      height: 500
+    zones:
+      entrance:
+        coordinates: 400,0,1520,0,1520,400,400,400
+        objects:
+          - person
+          - package
+      walkway:
+        coordinates: 0,400,1920,400,1920,800,0,800
+        objects:
+          - person
+    objects:
+      track:
+        - person
+        - car
+        - package
+        - bicycle
+      filters:
+        person:
+          min_area: 2500
+          max_area: 100000
+          threshold: 0.75
+          min_score: 0.60
+        package:
+          min_area: 1000
+          max_area: 50000
+          threshold: 0.65
+
+  driveway:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://192.168.0.XXX:7447/YOUR_DRIVEWAY_STREAM_ID
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: true
+      width: 1920
+      height: 1080
+      fps: 5
+    record:
+      enabled: true
+      retain:
+        days: 7
+        mode: active_objects
+    snapshots:
+      enabled: true
+    zones:
+      driveway_main:
+        coordinates: 200,200,1720,200,1720,880,200,880
+        objects:
+          - person
+          - car
+          - truck
+          - bicycle
+      street_view:
+        coordinates: 0,0,1920,200,1920,1080,0,1080
+        objects:
+          - car
+          - truck
+    objects:
+      track:
+        - person
+        - car
+        - truck
+        - bicycle
+        - motorcycle
+
+  garage:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://192.168.0.XXX:7447/YOUR_GARAGE_STREAM_ID
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: true
+      width: 1920
+      height: 1080
+      fps: 5
+    zones:
+      garage_door:
+        coordinates: 600,300,1320,300,1320,780,600,780
+        objects:
+          - person
+          - car
+    objects:
+      track:
+        - person
+        - car
+
+  backyard_patio:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://192.168.0.XXX:7447/YOUR_PATIO_STREAM_ID
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: true
+      width: 1920
+      height: 1080
+      fps: 5
+    zones:
+      patio_area:
+        coordinates: 400,400,1520,400,1520,680,400,680
+        objects:
+          - person
+          - dog
+          - cat
+    objects:
+      track:
+        - person
+        - dog
+        - cat
+        - bicycle
+
+  back_road:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://192.168.0.XXX:7447/YOUR_ROAD_STREAM_ID
+          roles:
+            - detect
+            - record
+    detect:
+      enabled: true
+      width: 1920
+      height: 1080
+      fps: 5
+    objects:
+      track:
+        - person
+        - car
+        - truck
+        - bicycle
+        - motorcycle
+
+# Global Object Detection Settings
+objects:
+  track:
+    - person
+    - car
+    - truck
+    - bicycle
+    - motorcycle
+    - dog
+    - cat
+    - package
+  filters:
+    person:
+      min_area: 2500
+      max_area: 100000
+      threshold: 0.75
+      min_score: 0.60
+    car:
+      min_area: 15000
+      max_area: 200000
+      threshold: 0.70
+      min_score: 0.60
+    truck:
+      min_area: 20000
+      max_area: 300000
+      threshold: 0.70
+    package:
+      min_area: 1000
+      max_area: 50000
+      threshold: 0.65
+    bicycle:
+      min_area: 2000
+      max_area: 50000
+      threshold: 0.70
+    motorcycle:
+      min_area: 3000
+      max_area: 80000
+      threshold: 0.70
+    dog:
+      min_area: 1000
+      max_area: 50000
+      threshold: 0.70
+    cat:
+      min_area: 500
+      max_area: 20000
+      threshold: 0.70
+
+# Recording Configuration
+record:
+  enabled: true
+  expire_interval: 60
+  retain:
+    days: 7
+    mode: active_objects
+  events:
+    pre_capture: 5
+    post_capture: 10
+    objects:
+      - person
+      - car
+      - package
+    retain:
+      default: 7
+      mode: motion
+      objects:
+        person: 14  # Keep person events for 2 weeks
+        package: 30  # Keep package events for 1 month
+
+# Snapshot Configuration
+snapshots:
+  enabled: true
+  timestamp: false
+  bounding_box: true
+  crop: false
+  height: 500
+  retain:
+    default: 7
+    objects:
+      person: 14
+      package: 30
+
+# Motion Detection (fallback)
+motion:
+  threshold: 25
+  contour_area: 30
+  delta_alpha: 0.2
+  frame_alpha: 0.2
+  frame_height: 180
+  improve_contrast: false
+  lightning_threshold: 0.8
+
+# UI Configuration
+ui:
+  live_mode: mse
+  timezone: America/New_York  # Adjust to your timezone
+  use_experimental: false
+  strftime_fmt: "%m/%d/%Y %H:%M:%S"
+
+# Logging
+logger:
+  default: info
+  logs:
+    frigate.video: warning
+    frigate.object_processing: info
+    frigate.mqtt: info

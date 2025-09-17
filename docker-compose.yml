@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  frigate:
+    container_name: frigate
+    privileged: true
+    restart: unless-stopped
+    image: ghcr.io/blakeblackshear/frigate:stable
+    shm_size: "512mb"  # Increased for 5 cameras
+    devices:
+      - /dev/dri/renderD128  # Intel GPU acceleration (if available)
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./config:/config
+      - ./storage:/media/frigate
+      - type: tmpfs
+        target: /tmp/cache
+        tmpfs:
+          size: 2000000000  # 2GB cache for better performance
+    ports:
+      - "5000:5000"   # Frigate Web UI
+      - "8971:8971"   # Go2RTC
+      - "8554:8554"   # RTSP restream
+      - "8555:8555/tcp"  # WebRTC
+      - "8555:8555/udp"  # WebRTC
+    environment:
+      FRIGATE_RTSP_PASSWORD: "YOUR_PROTECT_PASSWORD"
+      PLUS_API_KEY: "YOUR_FRIGATE_PLUS_KEY"  # Optional for enhanced models
+    networks:
+      - frigate
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Optional: MQTT Broker (if you don't have one)
+  mqtt:
+    container_name: frigate-mqtt
+    image: eclipse-mosquitto:2.0
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mqtt-config:/mosquitto/config
+      - ./mqtt-data:/mosquitto/data
+      - ./mqtt-logs:/mosquitto/log
+    networks:
+      - frigate
+
+networks:
+  frigate:
+    driver: bridge

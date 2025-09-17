@@ -1,0 +1,457 @@
+# Frigate 0.13+ Best Practices Configuration 2024
+# Optimized for UDM Special Edition Integration
+# Latest recommendations from Frigate community
+
+# MQTT Configuration
+mqtt:
+  host: 192.168.0.81
+  port: 1883
+  topic_prefix: frigate
+  client_id: frigate
+  stats_interval: 60
+
+# Database Configuration (Latest best practices)
+database:
+  path: /media/frigate/frigate.db
+
+# Telemetry (Privacy-conscious settings)
+telemetry:
+  version_check: false  # Disable for privacy
+
+# API Configuration
+api:
+  host: 0.0.0.0
+  port: 5000
+
+# Hardware Acceleration (Latest OpenVINO model)
+model:
+  width: 320
+  height: 320
+  input_tensor: nhwc
+  input_pixel_format: rgb
+  path: /openvino-model/ssdlite_mobilenet_v2.xml
+  labelmap_path: /openvino-model/coco_91cl_bkgr.txt
+
+# 2024 Best Practice: CPU + OpenVINO detector
+detectors:
+  ov:
+    type: openvino
+    device: AUTO
+    model:
+      path: /openvino-model/ssdlite_mobilenet_v2.xml
+
+# Latest Go2RTC configuration for better streaming
+go2rtc:
+  streams:
+    # Your UDM-SE camera streams
+    front_doorbell:
+      - rtsps://192.168.0.1:7441/TD0n4xjjZyz7098h?enableSrtp
+      - "ffmpeg:front_doorbell#audio=opus"
+    garage:
+      - rtsps://192.168.0.1:7441/w43nFnaYRCXWS4r7?enableSrtp
+      - "ffmpeg:garage#audio=opus"
+    front_driveway:
+      - rtsps://192.168.0.1:7441/tSTGrRA5hL0JDWdq?enableSrtp
+      - "ffmpeg:front_driveway#audio=opus"
+    back_patio:
+      - rtsps://192.168.0.1:7441/SLNQWyDL3NmCC29h?enableSrtp
+      - "ffmpeg:back_patio#audio=opus"
+    back_left_patio:
+      - rtsps://192.168.0.1:7441/RK7XFgef0NfKdgUj?enableSrtp
+      - "ffmpeg:back_left_patio#audio=opus"
+
+# Camera configurations with 2024 best practices
+cameras:
+  front_doorbell:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/front_doorbell  # Go2RTC restream
+          roles:
+            - detect
+        - path: rtsps://192.168.0.1:7441/TD0n4xjjZyz7098h?enableSrtp  # Direct high-res
+          roles:
+            - record  # Only for events, not continuous
+      hwaccel_args: preset-intel-qsv-h264  # Latest Intel acceleration
+      output_args:
+        detect: -f rawvideo -pix_fmt yuv420p
+        record: -f segment -segment_time 10 -segment_format mp4 -reset_timestamps 1 -strftime 1 -c copy
+    detect:
+      enabled: true
+      width: 1280  # Optimized resolution for detection
+      height: 720
+      fps: 5
+      max_disappeared: 25
+      stationary:
+        interval: 50
+        threshold: 25
+    # 2024 Best Practice: Event-only recording (UDM-SE handles continuous)
+    record:
+      enabled: true
+      retain:
+        days: 3  # Short retention for events only
+        mode: active_objects
+      events:
+        pre_capture: 5
+        post_capture: 5
+        objects:
+          - person
+          - package
+          - car
+        required_zones: []
+    live:
+      height: 720
+      quality: 8
+    snapshots:
+      enabled: true
+      timestamp: false
+      bounding_box: true
+      crop: false
+      height: 500
+      required_zones: []
+      retain:
+        default: 7
+        objects:
+          person: 14
+          package: 30
+    # 2024 Best Practice: Smart zone configuration
+    zones:
+      entrance:
+        coordinates: 300,100,980,100,980,400,300,400
+        objects:
+          - person
+          - package
+        filters:
+          person:
+            min_area: 2000
+            threshold: 0.8
+      walkway:
+        coordinates: 100,400,1180,400,1180,620,100,620
+        objects:
+          - person
+      driveway_approach:
+        coordinates: 0,620,1280,620,1280,720,0,720
+        objects:
+          - car
+          - person
+    objects:
+      track:
+        - person
+        - car
+        - package
+        - bicycle
+        - dog
+      filters:
+        person:
+          min_area: 2500
+          max_area: 100000
+          threshold: 0.75
+          min_score: 0.6
+          min_ratio: 0.2
+          max_ratio: 10.0
+        package:
+          min_area: 1000
+          max_area: 50000
+          threshold: 0.7
+          min_score: 0.65
+        car:
+          min_area: 15000
+          threshold: 0.7
+
+  garage:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/garage
+          roles:
+            - detect
+        - path: rtsps://192.168.0.1:7441/w43nFnaYRCXWS4r7?enableSrtp
+          roles:
+            - record
+      hwaccel_args: preset-intel-qsv-h264
+    detect:
+      enabled: true
+      width: 1280
+      height: 720
+      fps: 5
+    record:
+      enabled: true
+      retain:
+        days: 3
+        mode: active_objects
+    zones:
+      garage_door:
+        coordinates: 320,150,960,150,960,570,320,570
+        objects:
+          - person
+          - car
+      garage_interior:
+        coordinates: 480,300,800,300,800,520,480,520
+        objects:
+          - person
+    objects:
+      track:
+        - person
+        - car
+        - bicycle
+
+  front_driveway:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/front_driveway
+          roles:
+            - detect
+        - path: rtsps://192.168.0.1:7441/tSTGrRA5hL0JDWdq?enableSrtp
+          roles:
+            - record
+      hwaccel_args: preset-intel-qsv-h264
+    detect:
+      enabled: true
+      width: 1280
+      height: 720
+      fps: 5
+    record:
+      enabled: true
+      retain:
+        days: 3
+        mode: active_objects
+    zones:
+      main_driveway:
+        coordinates: 160,230,1120,230,1120,620,160,620
+        objects:
+          - person
+          - car
+          - truck
+          - bicycle
+      street_monitoring:
+        coordinates: 0,0,1280,230,1280,720,0,720
+        objects:
+          - car
+          - truck
+    objects:
+      track:
+        - person
+        - car
+        - truck
+        - bicycle
+        - motorcycle
+
+  back_patio:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/back_patio
+          roles:
+            - detect
+        - path: rtsps://192.168.0.1:7441/SLNQWyDL3NmCC29h?enableSrtp
+          roles:
+            - record
+      hwaccel_args: preset-intel-qsv-h264
+    detect:
+      enabled: true
+      width: 1280
+      height: 720
+      fps: 5
+    record:
+      enabled: true
+      retain:
+        days: 3
+        mode: active_objects
+    zones:
+      patio_area:
+        coordinates: 240,230,1040,230,1040,570,240,570
+        objects:
+          - person
+          - dog
+          - cat
+      yard_perimeter:
+        coordinates: 0,570,1280,570,1280,720,0,720
+        objects:
+          - person
+          - dog
+    objects:
+      track:
+        - person
+        - dog
+        - cat
+        - bicycle
+
+  back_left_patio:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/back_left_patio
+          roles:
+            - detect
+        - path: rtsps://192.168.0.1:7441/RK7XFgef0NfKdgUj?enableSrtp
+          roles:
+            - record
+      hwaccel_args: preset-intel-qsv-h264
+    detect:
+      enabled: true
+      width: 1280
+      height: 720
+      fps: 5
+    record:
+      enabled: true
+      retain:
+        days: 3
+        mode: active_objects
+    zones:
+      left_patio:
+        coordinates: 160,300,1120,300,1120,520,160,520
+        objects:
+          - person
+          - dog
+      road_surveillance:
+        coordinates: 0,0,1280,300,1280,720,0,720
+        objects:
+          - person
+          - car
+          - truck
+    objects:
+      track:
+        - person
+        - car
+        - truck
+        - dog
+        - cat
+
+# 2024 Global Object Detection Best Practices
+objects:
+  track:
+    - person
+    - car
+    - truck
+    - bicycle
+    - motorcycle
+    - dog
+    - cat
+    - package
+  # Latest filter recommendations
+  filters:
+    person:
+      min_area: 2500
+      max_area: 100000
+      threshold: 0.75
+      min_score: 0.6
+      min_ratio: 0.2
+      max_ratio: 10.0
+    car:
+      min_area: 15000
+      max_area: 200000
+      threshold: 0.7
+      min_score: 0.6
+    truck:
+      min_area: 20000
+      max_area: 300000
+      threshold: 0.7
+    package:
+      min_area: 1000
+      max_area: 50000
+      threshold: 0.7
+      min_score: 0.65
+    bicycle:
+      min_area: 2000
+      max_area: 50000
+      threshold: 0.7
+    motorcycle:
+      min_area: 3000
+      max_area: 80000
+      threshold: 0.7
+    dog:
+      min_area: 1000
+      max_area: 50000
+      threshold: 0.7
+    cat:
+      min_area: 500
+      max_area: 20000
+      threshold: 0.7
+
+# 2024 Recording Best Practices (Event-focused for UDM-SE users)
+record:
+  enabled: true
+  expire_interval: 60
+  sync_recordings: false  # Better performance
+  retain:
+    days: 3  # Short retention - UDM-SE handles long-term
+    mode: active_objects
+  events:
+    pre_capture: 5
+    post_capture: 5
+    objects:
+      - person
+      - car
+      - package
+    retain:
+      default: 3
+      mode: active_objects
+      objects:
+        person: 7
+        package: 14
+        car: 3
+
+# 2024 Snapshot Best Practices
+snapshots:
+  enabled: true
+  timestamp: false
+  bounding_box: true
+  crop: false
+  height: 500
+  quality: 90  # Higher quality for better analysis
+  retain:
+    default: 7
+    objects:
+      person: 14
+      package: 30
+      car: 7
+
+# 2024 Motion Detection Optimization
+motion:
+  threshold: 25
+  contour_area: 10  # Reduced for better sensitivity
+  delta_alpha: 0.2
+  frame_alpha: 0.2
+  frame_height: 180
+  improve_contrast: true  # Better detection in varied lighting
+  lightning_threshold: 0.8
+
+# UI Configuration (Latest features)
+ui:
+  live_mode: webrtc  # Latest streaming method
+  timezone: America/New_York
+  use_experimental: false
+  strftime_fmt: "%m/%d/%Y %H:%M:%S"
+  time_format: browser
+  date_style: short
+  time_style: medium
+
+# 2024 Logging Best Practices
+logger:
+  default: info
+  logs:
+    frigate.video: warning
+    frigate.object_processing: info
+    frigate.mqtt: info
+    frigate.record.maintainer: warning
+    frigate.detectapi: warning
+    frigate.events: info
+
+# Birdseye (Multi-camera view) - 2024 optimized
+birdseye:
+  enabled: true
+  restream: false
+  width: 1280
+  height: 720
+  quality: 8
+  mode: objects  # Only show when objects detected
+
+# Latest Home Assistant Integration
+homeassistant:
+  host: 192.168.0.81
+  port: 8123
+  access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIwMjM1N2RjZDBhMTY0NjJmYTBkNTlhMzczMjc2Y2ZhYSIsImlhdCI6MTc1ODA0NjE3MywiZXhwIjoyMDczNDA2MTczfQ.7tYGiaSHeTFsZTZusbSuRiDp_jFJEUyIKbOf3nc4UOw
+
+# 2024 Version Check
+version: 0.13
