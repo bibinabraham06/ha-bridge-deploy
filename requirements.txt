@@ -1,0 +1,17 @@
+# Home Assistant AI Bridge Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core Flask Framework
+flask>=2.3.0
+flask-cors>=4.0.0
+
+# HTTP Client Library
+requests>=2.31.0
+
+# Optional: Development and Testing
+pytest>=7.0.0
+black>=23.0.0
+
+# Optional: Enhanced Features
+python-dotenv>=1.0.0
+pyyaml>=6.0.0
